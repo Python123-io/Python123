@@ -1,0 +1,76 @@
+import requests
+import json
+import os  # 导入os模块用于创建目录
+
+# 初始的API URL
+base_url = "https://python123.io/api/v1/turtles"
+
+# 设置初始的分页参数
+paging_params = {
+    "after": "",
+    "limit": 24
+}
+
+# 设置排序参数
+sort_params = {
+    "_id": -1
+}
+
+# 用于存储获取到的数据的计数器
+turtles_count = 0
+# 指定保存代码的目录
+output_dir = r"C:\Users\Administrator\Downloads\codes"
+# 如果目录不存在，则创建它
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+    print(f"已创建保存目录: {output_dir}")
+print("开始爬取数据并保存代码...")
+
+while True:
+    filter_param = "{}"
+    sort_str = json.dumps(sort_params).replace('"', '%22')
+    paging_str = json.dumps(paging_params).replace('"', '%22')
+    url = f"{base_url}?sort={sort_str}&filter={filter_param}&paging={paging_str}"
+    print(f"正在请求: {url}")
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        if data["code"] == 200:
+            current_page_data = data["data"]
+            if not current_page_data:
+                print("当前页面没有数据，可能已到达最后一页或数据已空。")
+                break
+            for turtle in current_page_data:
+                turtle_id = turtle["_id"]
+                turtle_code = turtle["code"]
+                views = turtle.get("views",0)
+                # 构建文件名
+                filename = os.path.join(output_dir, f"{views}_{turtle_id}.txt")
+                # 保存代码到文件
+                try:
+                    with open(filename, "w", encoding="utf-8") as f:
+                        f.write(turtle_code)
+                    turtles_count += 1
+                    # print(f"  已保存: {filename}")
+                except IOError as e:
+                    print(f"  保存文件 {filename} 时出错: {e}")
+            print(f"成功处理 {len(current_page_data)} 条数据（已保存到文件）。")
+            if not data["meta"]["hasNext"]:
+                print("已到达最后一页 (hasNext is false)。")
+                break
+            else:
+                last_turtle_id = current_page_data[-1]["_id"]
+                paging_params["after"] = last_turtle_id
+                print(f"下一页的 'after' 参数将是: {last_turtle_id}")
+        else:
+            print(f"API返回错误，code: {data['code']}, message: {data.get('message', '未知错误')}")
+            break
+    except requests.exceptions.RequestException as e:
+        print(f"请求时发生错误: {e}")
+        break
+    except json.JSONDecodeError:
+        print("无法解析JSON响应。")
+        break
+
+print(f"\n爬取完成！总共成功保存了 {turtles_count} 个文件的代码。")
